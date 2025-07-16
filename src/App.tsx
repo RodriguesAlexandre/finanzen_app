@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback, createContext, useContext } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import { Transaction, TransactionType, Allocation, AllocationCategory, Settings, Language, Theme, View, DateFilter, FilterType, RecurringTransaction, Receivable, ReceivableStatus, Reminder } from './types';
 import { translations, allocationCategoryLabels, sampleTransactions, sampleAllocations } from './constants';
 import { getFinancialInsights } from './services/geminiService';
@@ -56,6 +56,8 @@ interface AppContextType {
     setLang: (lang: Language) => void;
     theme: Theme;
     toggleTheme: () => void;
+    view: View;
+    setView: (view: View) => void;
     transactions: Transaction[];
     allocations: Allocation[];
     recurringTransactions: RecurringTransaction[];
@@ -148,6 +150,8 @@ const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         emergencyFundGoal: 10000,
     });
     const [filter, setFilter] = useLocalStorage<DateFilter>('finanzen-filter', { type: 'all', value: null });
+    const [view, setView] = useLocalStorage<View>('finanzen-view', 'dashboard');
+
 
     const t = useCallback((key: keyof typeof translations.en) => {
         return translations[settings.language][key] || translations.en[key];
@@ -278,8 +282,6 @@ const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 
     const updateSettings = (newSettings: Partial<Settings>) => setSettings(prev => ({ ...prev, ...newSettings }));
-    const setLang = (lang: Language) => updateSettings({ language: lang });
-    const toggleTheme = () => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' });
 
     const loadSampleData = () => {
         setTransactions(sampleTransactions);
@@ -409,9 +411,53 @@ const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         return data;
     }, [recurringTransactions, investmentFinancials, allocations]);
 
-    const value = { t, lang: settings.language, setLang, theme: settings.theme, toggleTheme, transactions, allocations, recurringTransactions, receivables, reminders, filteredTransactions, filteredAllocations, settings, filter, setFilter, addTransaction, updateTransaction, deleteTransaction, addAllocation, updateAllocation, deleteAllocation, addRecurringTransaction, updateRecurringTransaction, deleteRecurringTransaction, addReceivable, updateReceivable, deleteReceivable, markReceivableAsPaid, addReminder, updateReminder, deleteReminder, markReminderAsPaid, updateSettings, loadSampleData, financials, investmentFinancials, projectionData };
+    const value: AppContextType = { 
+        t, 
+        lang: settings.language, 
+        setLang: (lang: Language) => updateSettings({ language: lang }),
+        theme: settings.theme, 
+        toggleTheme: () => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' }),
+        view,
+        setView,
+        transactions, 
+        allocations, 
+        recurringTransactions, 
+        receivables, 
+        reminders, 
+        filteredTransactions, 
+        filteredAllocations, 
+        settings, 
+        filter, 
+        setFilter, 
+        addTransaction, 
+        updateTransaction, 
+        deleteTransaction, 
+        addAllocation, 
+        updateAllocation, 
+        deleteAllocation, 
+        addRecurringTransaction, 
+        updateRecurringTransaction, 
+        deleteRecurringTransaction, 
+        addReceivable, 
+        updateReceivable, 
+        deleteReceivable, 
+        markReceivableAsPaid, 
+        addReminder, 
+        updateReminder, 
+        deleteReminder, 
+        markReminderAsPaid, 
+        updateSettings, 
+        loadSampleData, 
+        financials, 
+        investmentFinancials, 
+        projectionData,
+    };
 
-    return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+    return (
+        <AppContext.Provider value={value}>
+            {children}
+        </AppContext.Provider>
+    );
 };
 
 // --- UI Components ---
@@ -1506,7 +1552,7 @@ const RemindersView: React.FC = () => {
         const [year, month] = displayMonth.split('-').map(Number);
         const dueDateForMonth = new Date(year, month - 1, rem.dueDay);
 
-        if (dueDateForMonth < today && displayMonth === today.toISOString().slice(0, 7)) {
+        if (dueDateForMonth < today) {
             return 'overdueStatus';
         }
         
@@ -1577,7 +1623,7 @@ const RemindersView: React.FC = () => {
 
 
 const SettingsView: React.FC = () => {
-    const { t, settings, updateSettings } = useAppContext();
+    const { t, settings, updateSettings, lang, setLang } = useAppContext();
     const [goal, setGoal] = useState(settings.emergencyFundGoal.toString());
     
     const handleGoalUpdate = (e: React.FormEvent) => {
@@ -1596,7 +1642,7 @@ const SettingsView: React.FC = () => {
             </Card>
             <Card>
                 <h3 className="text-lg font-semibold text-on-surface mb-4">{t('language')}</h3>
-                 <select value={settings.language} onChange={(e) => updateSettings({language: e.target.value as Language})} className="w-full bg-background text-on-surface p-2 rounded-md border border-on-surface/20 focus:ring-primary focus:border-primary">
+                 <select value={lang} onChange={(e) => setLang(e.target.value as Language)} className="w-full bg-background text-on-surface p-2 rounded-md border border-on-surface/20 focus:ring-primary focus:border-primary">
                     <option value="pt">Português</option>
                     <option value="en">English</option>
                 </select>
@@ -1612,7 +1658,7 @@ const SettingsView: React.FC = () => {
     );
 };
 
-const MainContent: React.FC<{ view: View, setView: (v: View) => void }> = ({ view, setView }) => {
+const MainContent: React.FC<{ view: View }> = ({ view }) => {
     return (
         <main className="flex-1 p-6 bg-background dark:bg-background overflow-y-auto">
             <Header view={view} />
@@ -1630,14 +1676,19 @@ const MainContent: React.FC<{ view: View, setView: (v: View) => void }> = ({ vie
 };
 
 export default function App() {
-    const [view, setView] = useLocalStorage<View>('finanzen-view', 'dashboard');
-
     return (
         <AppProvider>
-            <div className="flex h-screen bg-background dark:bg-background text-on-surface dark:text-on-surface font-sans">
-                <Sidebar view={view} setView={setView} />
-                <MainContent view={view} setView={setView}/>
-            </div>
+            <AppContent />
         </AppProvider>
+    );
+}
+
+const AppContent: React.FC = () => {
+    const { view, setView } = useAppContext();
+     return (
+        <div className="flex h-screen bg-background dark:bg-background text-on-surface dark:text-on-surface font-sans">
+            <Sidebar view={view} setView={setView} />
+            <MainContent view={view} />
+        </div>
     );
 }
